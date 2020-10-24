@@ -1,7 +1,6 @@
 import socketserver
 import argparse
 from threading import Thread
-from typing import *
 from minecraft.networking.packets.clientbound.play import ChatMessagePacket
 from minecraft.networking.connection import Connection
 from minecraft.authentication import AuthenticationToken
@@ -113,11 +112,11 @@ def handleOutput(self, data):
 class IRCHandler(socketserver.BaseRequestHandler):
 
     # MC player data
-    username: str = None
-    email: str = None
-    password: str = None
-    auth: AuthenticationToken = None
-    connection: Connection = None
+    username = None
+    email = None
+    password = None
+    auth = None
+    connection = None
 
     has_player_update = False
     online_players = ["server"]
@@ -175,7 +174,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
             packet.message = message
             self.connection.write_packet(packet)
 
-    def connectToMC(self, server: str, port: int):
+    def connectToMC(self, server, port):
 
         if not (self.username or self.email or self.password):
             return b"Missing login info"
@@ -205,14 +204,14 @@ class IRCHandler(socketserver.BaseRequestHandler):
         while True:
 
             # Read the incoming data
-            self.data: bytes = self.request.recv(1024).strip()
+            self.data = self.request.recv(1024).strip()
 
             # Handle disconnect
             if not self.data:
                 continue
 
             # Try to come up with a way to handle the message
-            split_dat: List[str] = self.data.decode().split(" ")
+            split_dat = self.data.decode().split(" ")
             if len(split_dat) >= 1 and split_dat[0].upper() in self.command_handlers:
                 message = self.command_handlers[split_dat[0].upper()](
                     self, split_dat[1:])
