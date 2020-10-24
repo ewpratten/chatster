@@ -13,7 +13,7 @@ import json
 
 # Consts
 SERVER_NAME = "Chatster"
-MOTD = "Use '/join mc.example.com' to join a server"
+MOTD = "Use '/join #mc.example.com' to join a server"
 
 # IRC codes
 RPL_WELCOME = '001'
@@ -235,9 +235,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
 
         print(f"{self.username} left")
 
-
-if __name__ == "__main__":
-
+def main():
     # Parse any settings
     ap = argparse.ArgumentParser()
     ap.add_argument("-i", "--interface",
@@ -248,9 +246,14 @@ if __name__ == "__main__":
                     default="1.16.1")
     args = ap.parse_args()
 
+    global SUPPORTED_MINECRAFT_VERSIONS
     if args.mcversion in SUPPORTED_MINECRAFT_VERSIONS:
         GLOBL_MC_VERSION = SUPPORTED_MINECRAFT_VERSIONS[args.mcversion]
 
     # Start up the server
     server = socketserver.TCPServer((args.interface, args.port), IRCHandler)
     server.serve_forever()
+
+
+if __name__ == "__main__":
+    main()
