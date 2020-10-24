@@ -7,6 +7,7 @@
 To install chatster, ensure you have `python3` and `python3-pip` on your system, then run:
 
 ```sh
+python3 -m pip install git+https://github.com/ammaraskar/pyCraft.git
 python3 -m pip install git+https://github.com/Ewpratten/chatster.git
 ```
 

@@ -32,7 +32,7 @@ def handleNick(self, data):
 
     # set email
     self.email = data[0][1:]
-    print(f"{self.email} joined")
+    print("{email} joined".format(email=self.email))
 
     # Ack
     return ":{server} {status} {nick} :{motd}".format(
@@ -43,7 +43,8 @@ def handleUser(self, data):
 
     # Set username
     self.username = data[0]
-    print(f"{self.email} is {self.username}")
+    print("{email} is {username}".format(
+        email=self.email, username=self.username))
 
     return (b"")
 
@@ -52,7 +53,7 @@ def handleID(self, data):
 
     # Set username
     self.password = data[0]
-    print(f"{self.email} set password")
+    print("{email} set password".format(email=self.email))
 
     return (b"Done")
 
@@ -65,6 +66,7 @@ def buildPlayerList(self):
         ":{server} 366 {nick} {channel} :End of /NAMES list".format(
             server=SERVER_NAME, nick=self.client_ident(), channel=self.channel)
     ])
+
 
 def pingPong(self, _):
 
@@ -93,7 +95,8 @@ def handleJoin(self, data):
 
     output = []
 
-    output.append(f":{self.client_ident()} JOIN :{self.channel}\r\n")
+    output.append(":{ident} JOIN :{channel}\r\n".format(
+        ident=self.client_ident(), channel=self.channel))
     output.append(buildPlayerList(self))
 
     return "".join(output).encode()
@@ -164,7 +167,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
         # Cast the chat message
         if player != self.username:
             self.request.send(
-                f":{player} PRIVMSG {self.channel} {chat}\r\n".encode())
+                ":{player} PRIVMSG {channel} {chat}\r\n".format(player=player, channel=self.channel, chat=chat).encode())
 
     def sendChat(self, message):
         if self.connection:
@@ -233,7 +236,8 @@ class IRCHandler(socketserver.BaseRequestHandler):
         if self.connection:
             self.connection.disconnect()
 
-        print(f"{self.username} left")
+        print("{username} left".format(username=self.username))
+
 
 def main():
     # Parse any settings
