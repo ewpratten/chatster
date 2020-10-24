@@ -7,7 +7,9 @@ from minecraft.networking.connection import Connection
 from minecraft.authentication import AuthenticationToken
 from minecraft.exceptions import YggdrasilError
 from minecraft.networking.packets import serverbound
+from minecraft.networking.packets import clientbound
 from minecraft import SUPPORTED_MINECRAFT_VERSIONS
+import json
 
 # Consts
 SERVER_NAME = "Chatster"
@@ -24,6 +26,7 @@ ERR_NICKNAMEINUSE = '433'
 ERR_NEEDMOREPARAMS = '461'
 
 GLOBL_MC_VERSION = SUPPORTED_MINECRAFT_VERSIONS["1.16.1"]
+
 
 def handleNick(self, data):
 
@@ -54,32 +57,34 @@ def handleID(self, data):
     return (b"Done")
 
 
+def buildPlayerList(self):
+
+    return '\r\n'.join([
+        ":{server} 353 {nick} = {channel} :{nicks}".format(
+            server=SERVER_NAME, nick=self.client_ident(), channel=self.channel, nicks=" ".join(self.online_players)),
+        ":{server} 366 {nick} {channel} :End of /NAMES list".format(
+            server=SERVER_NAME, nick=self.client_ident(), channel=self.channel)
+    ])
+
 def pingPong(self, _):
+
+    if self.has_player_update:
+        self.request.send(buildPlayerList(self).encode())
 
     return (":{server} PONG :{server}".format(
         server=SERVER_NAME).encode())
 
 
-def buildPlayerList(self):
-
-    return '\r\n'.join([
-        ":{server} 353 {nick} = {channel} :{nicks}".format(
-            SERVER_NAME, self.username, self.channel, " ".join(self.online_players)),
-        ":{server} 366 {nick} {channel} :End of /NAMES list".format(
-            SERVER_NAME, self.username, self.channel)
-    ])
-
-
 def handleJoin(self, data):
 
     # Get server
-    server = data[0].split(':')
+    server = data[0].replace("#", "").split(':')
     port = 25565
     if len(server) == 2:
         port = int(server[1])
 
     server = server[0]
-    self.channel = server
+    self.channel = "#" + server
 
     status = self.connectToMC(server, port)
 
@@ -88,10 +93,18 @@ def handleJoin(self, data):
 
     output = []
 
-    output.append(f":{self.username} JOIN :{self.channel}\r\n")
+    output.append(f":{self.client_ident()} JOIN :{self.channel}\r\n")
     output.append(buildPlayerList(self))
 
     return "".join(output).encode()
+
+
+def logout(self, _):
+    self.finish()
+
+
+def handleOutput(self, data):
+    self.sendChat(" ".join(data[1:])[1:])
 
 
 class IRCHandler(socketserver.BaseRequestHandler):
@@ -103,6 +116,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
     auth: AuthenticationToken = None
     connection: Connection = None
 
+    has_player_update = False
     online_players = ["server"]
 
     channel = "none"
@@ -113,14 +127,44 @@ class IRCHandler(socketserver.BaseRequestHandler):
         "USER": handleUser,
         "PASS": handleID,
         "PING": pingPong,
-        "JOIN": handleJoin
+        "JOIN": handleJoin,
+        "QUIT": logout,
+        "PRIVMSG": handleOutput
     }
 
     def __init__(_, selfrequest, client_address, self):
         super().__init__(selfrequest, client_address, self)
 
     def handleIncomingChat(self, packet):
-        print(packet)
+
+        if type(packet.json_data) == str:
+            jdat = json.loads(packet.json_data)
+        else:
+            jdat = packet.json_data
+
+        if "extra" not in jdat:
+            return
+
+        # Build the chat message
+        chat = ""
+        for line in jdat["extra"]:
+            chat += line["text"] + " "
+
+        # Determine the sender
+        player = "server"
+        if packet.position == ChatMessagePacket.Position.SYSTEM:
+            if jdat["extra"][0]["text"][0] == "<":
+                player = jdat["extra"][0]["text"].split(
+                    " ")[0].replace("<", "").replace(">", "")
+                if player not in self.online_players:
+                    self.online_players.append(player)
+                    self.has_player_update = True
+                chat = " ".join(jdat["extra"][0]["text"].split(" ")[1:])
+
+        # Cast the chat message
+        if player != self.username:
+            self.request.send(
+                f":{player} PRIVMSG {self.channel} {chat}\r\n".encode())
 
     def sendChat(self, message):
         if self.connection:
@@ -140,16 +184,18 @@ class IRCHandler(socketserver.BaseRequestHandler):
 
             # Connect
 
-            self.connection = Connection(server, port, self.auth, allowed_versions=[GLOBL_MC_VERSION])
+            self.connection = Connection(
+                server, port, self.auth, allowed_versions=[GLOBL_MC_VERSION])
             self.connection.connect()
         except YggdrasilError as e:
             return str(e.yggdrasil_message).encode()
 
         def chatWrapper(packet):
-            self.handleIncomingChat()
+            self.handleIncomingChat(packet)
 
         # Set up chat handler
-        self.connection.register_packet_listener(chatWrapper, ChatMessagePacket)
+        self.connection.register_packet_listener(
+            chatWrapper, ChatMessagePacket)
         return None
 
     def handle(self):
@@ -173,7 +219,13 @@ class IRCHandler(socketserver.BaseRequestHandler):
             else:
                 print("Unknown command: {cmd}".format(cmd=" ".join(split_dat)))
 
-    def finish(self):
+    def client_ident(self):
+        """
+        Return the client identifier as included in many command replies.
+        """
+        return('%s!%s@%s' % (self.email, self.username, SERVER_NAME))
+
+    def finish(self, *args):
 
         # if self.auth:
         #     self.auth.sign_out(self.username, self.password)
