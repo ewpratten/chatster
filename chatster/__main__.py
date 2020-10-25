@@ -1,6 +1,7 @@
 import socketserver
 import argparse
 from threading import Thread
+from typing import *
 from minecraft.networking.packets.clientbound.play import ChatMessagePacket
 from minecraft.networking.connection import Connection
 from minecraft.authentication import AuthenticationToken
@@ -31,7 +32,7 @@ def handleNick(self, data):
 
     # set email
     self.email = data[0][1:]
-    print("{email} joined".format(email=self.email))
+    print(f"{self.email} joined")
 
     # Ack
     return ":{server} {status} {nick} :{motd}".format(
@@ -42,8 +43,7 @@ def handleUser(self, data):
 
     # Set username
     self.username = data[0]
-    print("{email} is {username}".format(
-        email=self.email, username=self.username))
+    print(f"{self.email} is {self.username}")
 
     return (b"")
 
@@ -52,7 +52,7 @@ def handleID(self, data):
 
     # Set username
     self.password = data[0]
-    print("{email} set password".format(email=self.email))
+    print(f"{self.email} set password")
 
     return (b"Done")
 
@@ -65,7 +65,6 @@ def buildPlayerList(self):
         ":{server} 366 {nick} {channel} :End of /NAMES list".format(
             server=SERVER_NAME, nick=self.client_ident(), channel=self.channel)
     ])
-
 
 def pingPong(self, _):
 
@@ -94,8 +93,7 @@ def handleJoin(self, data):
 
     output = []
 
-    output.append(":{ident} JOIN :{channel}\r\n".format(
-        ident=self.client_ident(), channel=self.channel))
+    output.append(f":{self.client_ident()} JOIN :{self.channel}\r\n")
     output.append(buildPlayerList(self))
 
     return "".join(output).encode()
@@ -112,11 +110,11 @@ def handleOutput(self, data):
 class IRCHandler(socketserver.BaseRequestHandler):
 
     # MC player data
-    username = None
-    email = None
-    password = None
-    auth = None
-    connection = None
+    username: str = None
+    email: str = None
+    password: str = None
+    auth: AuthenticationToken = None
+    connection: Connection = None
 
     has_player_update = False
     online_players = ["server"]
@@ -166,7 +164,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
         # Cast the chat message
         if player != self.username:
             self.request.send(
-                ":{player} PRIVMSG {channel} {chat}\r\n".format(player=player, channel=self.channel, chat=chat).encode())
+                f":{player} PRIVMSG {self.channel} {chat}\r\n".encode())
 
     def sendChat(self, message):
         if self.connection:
@@ -174,7 +172,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
             packet.message = message
             self.connection.write_packet(packet)
 
-    def connectToMC(self, server, port):
+    def connectToMC(self, server: str, port: int):
 
         if not (self.username or self.email or self.password):
             return b"Missing login info"
@@ -204,14 +202,14 @@ class IRCHandler(socketserver.BaseRequestHandler):
         while True:
 
             # Read the incoming data
-            self.data = self.request.recv(1024).strip()
+            self.data: bytes = self.request.recv(1024).strip()
 
             # Handle disconnect
             if not self.data:
                 continue
 
             # Try to come up with a way to handle the message
-            split_dat = self.data.decode().split(" ")
+            split_dat: List[str] = self.data.decode().split(" ")
             if len(split_dat) >= 1 and split_dat[0].upper() in self.command_handlers:
                 message = self.command_handlers[split_dat[0].upper()](
                     self, split_dat[1:])
@@ -235,8 +233,7 @@ class IRCHandler(socketserver.BaseRequestHandler):
         if self.connection:
             self.connection.disconnect()
 
-        print("{username} left".format(username=self.username))
-
+        print(f"{self.username} left")
 
 def main():
     # Parse any settings
